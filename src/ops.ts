@@ -133,7 +133,9 @@ export function canonicalizeOpsArgs(
 
 /**
  * Canonicalize `subagent` (spawn) arguments: fix only can't-be-wrong slips.
- * - `worktree` given as a non-empty branch-name string becomes {branch}.
+ * - `worktree` given as a branch-name string becomes {branch}; null-ish values
+ *   (JSON null, "null", "none", "undefined", "") are dropped — observed live:
+ *   the string "null" otherwise became a branch literally named "null".
  * - `skills`/`tools` given as arrays become the comma-separated string form.
  * - `thinking` casing normalized against the lowercase enum values.
  * - a `op: "spawn"|"subagent"|"create"|"start"` field is dropped (the model
@@ -143,8 +145,15 @@ export function canonicalizeOpsArgs(
 export function canonicalizeSpawnArgs(args: unknown, thinkingEnum: readonly string[]): unknown {
 	if (!args || typeof args !== "object" || Array.isArray(args)) return args;
 	const record = { ...(args as Record<string, unknown>) };
-	if (typeof record.worktree === "string" && record.worktree.trim() !== "") {
-		record.worktree = { branch: record.worktree };
+	const worktree = record.worktree;
+	if (
+		worktree === null ||
+		(typeof worktree === "string" &&
+			["", "null", "none", "undefined"].includes(worktree.trim().toLowerCase()))
+	) {
+		delete record.worktree;
+	} else if (typeof worktree === "string" && worktree.trim() !== "") {
+		record.worktree = { branch: worktree };
 	}
 	for (const key of ["skills", "tools"] as const) {
 		const value = record[key];

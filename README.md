@@ -82,7 +82,7 @@ Most upstream updates only change internal logic, so upgrading the dependency is
 
 ```sh
 npm install
-npm test            # 33 tests: forwarding, help, fill-ins, stability, scoped catalog, child sessions
+npm test            # 34 tests: forwarding, help, fill-ins, stability, scoped catalog, child sessions
 npm run typecheck
 npm run inventory   # regenerate upstream-inventory.json (+ SCENARIO=child for the child file)
 npm run measure     # token table above

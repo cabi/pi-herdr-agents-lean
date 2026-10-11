@@ -375,6 +375,14 @@ describe("subagent fill-ins", () => {
 		expect(calls.at(-1)!.args.worktree).toEqual({ branch: "feat/x" });
 	});
 
+	it("drops null-ish worktree values instead of creating a branch named null", async () => {
+		for (const wt of [null, "null", "none", "undefined", ""]) {
+			await harness.callTool("subagent", { name: "worker", task: "t", worktree: wt });
+			const forwarded = calls.at(-1)!.args;
+			expect(forwarded).not.toHaveProperty("worktree");
+		}
+	});
+
 	it("joins array skills/tools into the upstream comma-separated strings", async () => {
 		await harness.callTool("subagent", {
 			name: "worker",
