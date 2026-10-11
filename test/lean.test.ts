@@ -532,6 +532,61 @@ describe("scoped model catalog", () => {
 		expect([...harness.tools.keys()]).toEqual(["subagent", "subagent_ops"]);
 	});
 
+	it("rebuilds upstream task-category shortlists from the scoped set", async () => {
+		const harness = bootParent();
+		__stubCapturedDefForTests("subagent", {
+			promptGuidelines: [
+				"Coordinate subagent work.",
+				"Authenticated subagent models (use exact provider/model-id only):\n- opencode/gemini-3-flash — reasoning (off/low), text, 128k context, 64k max output\n- opencode/claude-haiku-4-5 — reasoning (off/low/medium/high), text+image, 200k context, 64k max output\nTask-category shortlists (use task:<category> only as the entire model value):\n- coding: zai/glm-5.3, opencode/gpt-5.6-luna\n- review: opencode/claude-haiku-5-5, zai/glm-5.3-flash\n- qa: opencode/gpt-6-luna\nFor ordinary review, prefer a different authenticated model family.",
+			],
+		});
+		await harness.emit(
+			"session_start",
+			{},
+			makeCtx(join(root, "test"), {
+				scopedModels: [
+					{ model: scopedModel({ id: "glm-5.3" }) },
+					{ model: scopedModel() },
+				],
+			}),
+		);
+
+		const guidelines = harness.tools.get("subagent").promptGuidelines as string[];
+		const joined = guidelines.join("\n");
+		expect(joined).toContain("Task-category shortlists");
+		expect(joined).toContain("- coding: zai/glm-5.3\n");
+		expect(joined).toContain("- review: zai/glm-5.3-flash");
+		// non-scoped candidates and emptied categories are gone
+		expect(joined).not.toContain("opencode/gpt-5.6-luna");
+		expect(joined).not.toContain("opencode/claude-haiku");
+		expect(joined).not.toContain("- qa:");
+		// the note points at shortlists that are actually visible
+		expect(joined).toContain("Prefer the configured task-category shortlists");
+	});
+
+	it("drops the shortlists and their note when no configured candidate is scoped", async () => {
+		const harness = bootParent();
+		__stubCapturedDefForTests("subagent", {
+			promptGuidelines: [
+				"Authenticated subagent models (use exact provider/model-id only):\n- opencode/gemini-3-flash — reasoning (off/low), text\nTask-category shortlists (use task:<category> only as the entire model value):\n- coding: opencode/gpt-5.6-luna\n- review: opencode/claude-haiku-5-5",
+			],
+		});
+		await harness.emit(
+			"session_start",
+			{},
+			makeCtx(join(root, "test"), {
+				scopedModels: [{ model: scopedModel() }],
+			}),
+		);
+
+		const guidelines = harness.tools.get("subagent").promptGuidelines as string[];
+		const joined = guidelines.join("\n");
+		expect(joined).not.toContain("Task-category shortlists");
+		expect(joined).not.toContain("Prefer the configured task-category shortlists");
+		// the scoped catalog itself is still there
+		expect(joined).toContain("- zai/glm-5.3-flash —");
+	});
+
 	it("keeps the upstream catalog verbatim when no scoping is configured", async () => {
 		const harness = bootParent();
 		// default ctx has scopedModels: [] — no scoping configured

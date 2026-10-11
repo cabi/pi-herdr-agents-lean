@@ -29,13 +29,13 @@ export const LEAN_SUBAGENT_SNIPPET =
 	"Spawn a sub-agent in a pane or managed worktree; async — the result arrives as a new turn";
 
 /**
-/**
  * Lean routing guidelines. `upstreamGuidelines` is the live array from the
  * captured upstream `subagent` def. The model catalog is `scopedCatalog`
  * (built from ctx.scopedModels) when the session scopes models; otherwise
  * the upstream catalog line (last line starting with
- * "Authenticated subagent model") is carried over verbatim. The
- * task-preferences variant gets its shortlist note.
+ * "Authenticated subagent model") is carried over verbatim. The shortlist
+ * note appears only when shortlists are actually visible: carried verbatim,
+ * or rebuilt inside the scoped catalog.
  */
 export function leanSubagentGuidelines(
 	upstreamGuidelines: readonly string[] | undefined,
@@ -47,13 +47,16 @@ export function leanSubagentGuidelines(
 	const hasPreferences = (upstreamGuidelines ?? []).some((g) =>
 		g.includes("task-category shortlists"),
 	);
+	const showShortlistNote = scopedCatalog
+		? scopedCatalog.includes("Task-category shortlists")
+		: hasPreferences;
 	const rules = [
 		"Coordinate subagent work: give each child one bounded outcome — goal, allowed files, verification, whether to commit — keep dependent writes sequential, parallelize only independent tasks. Children are leaves: no pushing, merging, deploying, or orchestrating further agents unless the task authorizes it; the parent owns integration and verification.",
 		"Set both `model` and `thinking` per child: an exact authenticated provider/model-id (never an alias), `task:<category>` to expand configured candidates, or a comma-separated fallback list (worktrees use only the first entry; fallback lists don't combine with worktrees). Match thinking to difficulty: minimal/low for mechanical work, medium for ordinary implementation or review, high+ for architecture, security, hard diagnosis. Omitting both inherits the parent runtime — a discouraged fallback for orchestrated children.",
 		"Ordinary review prefers a different authenticated model family; a same-family reviewer in a fresh standalone session is a last resort — disclose that isolation, and never use it for cross-family verification.",
 		"Name a new coordinated group <task>-<role>[-n] (roles such as plan, research, ui, api, build, test, review, browser, security, perf, merge); after the final launch print name | agent kind | role | model | worktree, and use those names in prompts, handoffs, and results.",
 	];
-	if (hasPreferences) {
+	if (showShortlistNote) {
 		rules.push(
 			"Prefer the configured task-category shortlists when choosing child models.",
 		);
@@ -97,9 +100,14 @@ function tokenCount(value: number | undefined): string {
  * which can hide the user's actual picks. This lists exactly the scoped set,
  * in upstream's line format (thinking levels via pi-ai's
  * getSupportedThinkingLevels, like upstream's catalog builder).
+ *
+ * Upstream bakes its task-category shortlists into the same guideline string
+ * the scoped catalog replaces, so they are rebuilt here from the upstream
+ * text, filtered to scoped refs (categories with no scoped candidate drop).
  */
 export function buildScopedCatalog(
 	scopedModels: readonly ScopedModelLike[],
+	upstreamGuidelines?: readonly string[] | null,
 ): string {
 	const seen = new Set<string>();
 	const models = scopedModels
@@ -111,7 +119,7 @@ export function buildScopedCatalog(
 			seen.add(ref);
 			return true;
 		})
-		.sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
+		.sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${a.id}`));
 	const lines = [
 		"Authenticated subagent models enabled in this session (use exact provider/model-id only):",
 	];
@@ -131,7 +139,42 @@ export function buildScopedCatalog(
 		].filter(Boolean);
 		lines.push(`- ${model.provider}/${model.id} — ${facts.join(", ")}`);
 	}
+	const shortlists = scopedShortlists(upstreamGuidelines, seen);
+	if (shortlists) lines.push(...shortlists);
 	return lines.join("\n");
+}
+
+const SHORTLISTS_HEADER =
+	"Task-category shortlists (use task:<category> only as the entire model value):";
+
+/**
+ * Parse upstream's task-category shortlists out of the captured catalog
+ * guideline and keep only candidates present in the scoped set. Returns null
+ * when upstream has no shortlists or no candidate survives the filter.
+ */
+function scopedShortlists(
+	upstreamGuidelines: readonly string[] | null | undefined,
+	scopedRefs: ReadonlySet<string>,
+): string[] | null {
+	const catalog = (upstreamGuidelines ?? []).find((g) =>
+		g.startsWith("Authenticated subagent model"),
+	);
+	if (!catalog) return null;
+	const lines = catalog.split("\n");
+	const start = lines.indexOf(SHORTLISTS_HEADER);
+	if (start === -1) return null;
+	const kept: string[] = [];
+	for (const line of lines.slice(start + 1)) {
+		const match = /^- (\w+): (.+)$/.exec(line);
+		if (!match) break; // the shortlist block ends at the first non-category line
+		const refs = match[2]
+			.split(",")
+			.map((ref) => ref.trim())
+			.filter((ref) => scopedRefs.has(ref));
+		if (refs.length > 0) kept.push(`- ${match[1]}: ${refs.join(", ")}`);
+	}
+	if (kept.length === 0) return null;
+	return [SHORTLISTS_HEADER, ...kept];
 }
 
 /**

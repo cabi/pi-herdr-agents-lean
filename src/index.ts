@@ -374,12 +374,18 @@ function buildLeanOpsDef(): AnyToolDefinition | null {
 /**
  * Scoped-model catalog for the guidelines: pi resolves enabledModels /
  * --models into ctx.scopedModels (empty when no scoping is configured).
- * Returns null then, keeping upstream's catalog line verbatim.
+ * Returns null then, keeping upstream's catalog line verbatim. The captured
+ * upstream guidelines feed the shortlist rebuild: upstream's session_start
+ * handler (registered before this re-register) has already spliced the
+ * refreshed catalog, shortlists included, into that live array.
  */
 function scopedCatalogFrom(ctx: unknown): string | null {
 	const scoped = (ctx as { scopedModels?: unknown } | null | undefined)?.scopedModels;
 	if (!Array.isArray(scoped) || scoped.length === 0) return null;
-	return buildScopedCatalog(scoped as Parameters<typeof buildScopedCatalog>[0]);
+	return buildScopedCatalog(
+		scoped as Parameters<typeof buildScopedCatalog>[0],
+		latest.get("subagent")?.promptGuidelines,
+	);
 }
 
 function registerLeanTools(pi: ExtensionAPI, scopedCatalog?: string | null): void {

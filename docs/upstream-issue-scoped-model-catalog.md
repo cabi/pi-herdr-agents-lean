@@ -36,7 +36,10 @@ when no scoping is configured").
 
 When `ctx.scopedModels` is non-empty, build the catalog from that set instead of the
 available snapshot (same per-model facts format, no truncation needed); keep the current
-behavior when it is empty. Filtering the task-category shortlist candidates to scoped refs
+behavior when it is empty. Rebuilding the shortlist block completes it: parse the visible
+category lines out of the built guideline, keep only scoped refs, and drop emptied
+categories (upstream bakes models and shortlists into one string, so a text-level filter
+over its own output is enough).
 completes it.
 
 Sketch of the mechanism, from the wrapper where we shipped this
@@ -78,9 +81,12 @@ In upstream this lands where `runtime.modelCatalog` is assigned: use the scoped 
 
 ## Result
 
-Same session, same prompt, before → after:
-
-- before: children spawned on catalog entries `opencode/gemini-3-flash`,
+- after: `zai/glm-5.3-flash` picked from the scoped line, 0 failures, 4 calls — and the
+  per-model thinking levels in the line (`reasoning (low/high/max)`) also eliminated the
+  thinking-level retry loop
+- shortlists follow suit: the visible block went from three mixed-provider candidates per
+  category to `coding: zai/glm-5.3`, `recon: zai/glm-5.3-flash` — every listed pick is
+  spawnable
   `opencode/claude-haiku-4-5` → both `403 Model access is disabled`, 9 tool calls to converge
 - after: `zai/glm-5.3-flash` picked from the scoped line, 0 failures, 4 calls — and the
   per-model thinking levels in the line (`reasoning (low/high/max)`) also eliminated the

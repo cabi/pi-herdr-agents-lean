@@ -19,7 +19,7 @@ The extension initializes upstream against a `Proxy` of Pi's extension API:
 - Everything else — slash commands (`/subagent`, `/subagents-init`, `/worktree`), message renderers (`subagent_ping`, `subagent_result`, `subagent_status`), session events — passes through untouched.
 - Calls still validate against the **captured upstream schema** before execute, so upstream's contract (required fields, enums, patterns) keeps holding even though the model only sees the lean schema.
 - `op: help` (with `about: <op>`) returns the full upstream description, parameter schema, snippet, and guidelines for that op, so nothing is lost — it's fetched on demand instead of prepaid on every request.
-- When Pi resolves model scoping (`enabledModels` / `--models`) into `ctx.scopedModels`, the guidelines' model catalog is rebuilt from that scoped set instead of carried over. Upstream's catalog lists every authenticated model — disabled-at-provider ones included, truncated at 24 alphabetically — which invites spawning children that then fail with provider 403s. With no scoping configured, upstream's catalog line is carried verbatim.
+- When Pi resolves model scoping (`enabledModels` / `--models`) into `ctx.scopedModels`, the guidelines' model catalog — including the task-category shortlists — is rebuilt from that scoped set instead of carried over. Upstream's catalog lists every authenticated model — disabled-at-provider ones included, truncated at 24 alphabetically — which invites spawning children that then fail with provider 403s. With no scoping configured, upstream's catalog line is carried verbatim.
 
 The op set mirrors what upstream registered in this process: parent sessions get all ops; subagent child sessions (`PI_SUBAGENT_ID`) get the reduced child set; `PI_DENY_TOOLS` removes individual tools from both.
 
@@ -82,7 +82,7 @@ Most upstream updates only change internal logic, so upgrading the dependency is
 
 ```sh
 npm install
-npm test            # 34 tests: forwarding, help, fill-ins, stability, scoped catalog, child sessions
+npm test            # 36 tests: forwarding, help, fill-ins, stability, scoped catalog + shortlists, child sessions
 npm run typecheck
 npm run inventory   # regenerate upstream-inventory.json (+ SCENARIO=child for the child file)
 npm run measure     # token table above
