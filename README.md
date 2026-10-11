@@ -4,6 +4,8 @@ A token-lean wrapper around [pi-herdr-agents](https://github.com/giuseppecrj/pi-
 
 **Based on [pi-herdr-agents](https://github.com/giuseppecrj/pi-herdr-agents) by Giuseppe Rodriguez ([giuseppecrj](https://github.com/giuseppecrj)).** Original license: MIT (see [LICENSE](./LICENSE), copyright HazAT, preserved verbatim).
 
+The lean-wrapper approach comes from [Make your own lean version](https://github.com/kunkun9527/my-lean-pi-setup/blob/main/docs/make-your-own-lean.md) in [kunkun9527/my-lean-pi-setup](https://github.com/kunkun9527/my-lean-pi-setup) — the source of the idea, with the reasoning and side-by-side examples in the article [Cut 91% of your tool prompts: a practical guide for Pi Agent users and extension authors](https://dev.to/shengkai_su/cut-91-of-your-tool-prompts-a-practical-guide-for-pi-agent-users-and-extension-authors-4jo9).
+
 Every upstream feature is kept exactly as-is — same commands, same renderers, same events, same execute behavior. Upstream is installed as a pinned, exact-version dependency (`pi-herdr-agents@3.2.1`); no upstream code is copied or modified. The only change is what the model reads on every request: tool descriptions, parameter schemas, snippets, and guidelines are re-worded and deduplicated, and nine rarely-used tools are merged into one.
 
 ## How it works
@@ -57,6 +59,23 @@ Measured with `npm run measure` (js-tiktoken `o200k_base`, parent session, sessi
 | `[E_LEAN_ARGS]` | forwarded arguments fail upstream's schema, or `args` used on the wrong op |
 | `[E_LEAN_HELP_ABOUT]` | `about` names no known op |
 | `[E_LEAN_UNAVAILABLE]` | op's upstream tool isn't registered in this session |
+
+## Keeping up with upstream
+
+Pin the upstream version and upgrade by hand. The process is nearly always the same, so you can hand it to an agent too (this is the sync prompt from [Make your own lean version](https://github.com/kunkun9527/my-lean-pi-setup/blob/main/docs/make-your-own-lean.md), with this package's names filled in):
+
+```text
+Sync pi-herdr-agents-lean to the latest version of upstream pi-herdr-agents.
+
+1. Read MAINTENANCE.md first to understand the current upstream version and adaptation points.
+2. Check the latest upstream version. Compare the code and changelog between the two versions, and list: added or removed tools, changes to parameters and defaults, behavior changes, and whether the internals recorded in MAINTENANCE.md still hold.
+3. If only the version number changed and the code didn't, just upgrade the dependency.
+4. For new parameters or tools, add them to the lean version using the same trimming rules: common ones go in the schema, rare ones go in help. If upstream changed behavior, update the descriptions so they still match what the tool does.
+5. Run the tests, re-measure the tokens, and update the README and MAINTENANCE.md.
+6. Summarize the changes for me, and only publish after I confirm.
+```
+
+Most upstream updates only change internal logic, so upgrading the dependency is all it takes. When the adapter does need changes, it's usually because upstream renamed a tool or changed parameters.
 
 ## Development
 
