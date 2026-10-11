@@ -12,6 +12,7 @@
  */
 
 import type { SubagentOp } from "./ops.ts";
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 
 // ---------------------------------------------------------------------------
 // subagent (spawn)
@@ -28,13 +29,17 @@ export const LEAN_SUBAGENT_SNIPPET =
 	"Spawn a sub-agent in a pane or managed worktree; async — the result arrives as a new turn";
 
 /**
+/**
  * Lean routing guidelines. `upstreamGuidelines` is the live array from the
- * captured upstream `subagent` def; the catalog line (last line starting
- * with "Authenticated subagent model") is carried over verbatim, and the
+ * captured upstream `subagent` def. The model catalog is `scopedCatalog`
+ * (built from ctx.scopedModels) when the session scopes models; otherwise
+ * the upstream catalog line (last line starting with
+ * "Authenticated subagent model") is carried over verbatim. The
  * task-preferences variant gets its shortlist note.
  */
 export function leanSubagentGuidelines(
 	upstreamGuidelines: readonly string[] | undefined,
+	scopedCatalog?: string | null,
 ): string[] {
 	const catalog = (upstreamGuidelines ?? []).find((g) =>
 		g.startsWith("Authenticated subagent model"),
@@ -53,8 +58,80 @@ export function leanSubagentGuidelines(
 			"Prefer the configured task-category shortlists when choosing child models.",
 		);
 	}
-	if (catalog) rules.push(catalog);
+	if (scopedCatalog) rules.push(scopedCatalog);
+	else if (catalog) rules.push(catalog);
 	return rules;
+}
+
+// ---------------------------------------------------------------------------
+// Scoped model catalog (ctx.scopedModels)
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal structural view of pi's ScopedModel: the full model object plus an
+ * optional thinking level pinned by the pattern ("model:high").
+ */
+export interface ScopedModelLike {
+	model: {
+		provider: string;
+		id: string;
+		reasoning?: boolean;
+		input?: readonly string[];
+		contextWindow?: number;
+		maxTokens?: number;
+		thinkingLevelMap?: Record<string, unknown>;
+	};
+}
+
+function tokenCount(value: number | undefined): string {
+	if (!value) return "";
+	if (value >= 1_000) return `${Math.round(value / 1_000)}k`;
+	return String(value);
+}
+
+/**
+ * Catalog of the session's scoped models (pi resolves enabledModels / --models
+ * into ctx.scopedModels). Upstream's own catalog lists every model of every
+ * configured-auth provider — including ones disabled at the provider, which
+ * children then fail to spawn with — and truncates at 24 alphabetically,
+ * which can hide the user's actual picks. This lists exactly the scoped set,
+ * in upstream's line format (thinking levels via pi-ai's
+ * getSupportedThinkingLevels, like upstream's catalog builder).
+ */
+export function buildScopedCatalog(
+	scopedModels: readonly ScopedModelLike[],
+): string {
+	const seen = new Set<string>();
+	const models = scopedModels
+		.map((entry) => entry?.model)
+		.filter((model): model is ScopedModelLike["model"] => {
+			if (!model?.provider || !model?.id) return false;
+			const ref = `${model.provider}/${model.id}`;
+			if (seen.has(ref)) return false;
+			seen.add(ref);
+			return true;
+		})
+		.sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
+	const lines = [
+		"Authenticated subagent models enabled in this session (use exact provider/model-id only):",
+	];
+	for (const model of models) {
+		const supported = getSupportedThinkingLevels(model as any);
+		const facts = [
+			model.reasoning
+				? `reasoning (${supported.join("/") || "no thinking levels"})`
+				: "non-reasoning",
+			model.input?.includes("image") ? "text+image" : "text",
+			tokenCount(model.contextWindow)
+				? `${tokenCount(model.contextWindow)} context`
+				: undefined,
+			tokenCount(model.maxTokens)
+				? `${tokenCount(model.maxTokens)} max output`
+				: undefined,
+		].filter(Boolean);
+		lines.push(`- ${model.provider}/${model.id} — ${facts.join(", ")}`);
+	}
+	return lines.join("\n");
 }
 
 /**

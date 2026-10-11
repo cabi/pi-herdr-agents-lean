@@ -67,11 +67,11 @@ function measure(active: string[], defs: Map<string, AnyDef>) {
 	};
 }
 
-async function boot(kind: "upstream" | "lean") {
+async function boot(kind: "upstream" | "lean", ctx?: Record<string, unknown>) {
 	const harness = new Harness(freshWork);
 	if (kind === "upstream") upstream(harness as never);
 	else lean(harness as never);
-	await harness.emit("session_start", {}, makeCtx(freshWork));
+	await harness.emit("session_start", {}, ctx ?? makeCtx(freshWork));
 	return measure(harness.getActiveTools(), harness.tools as unknown as Map<string, AnyDef>);
 }
 
@@ -81,6 +81,43 @@ const freshWork = mkdtempSync(join(tmpdir(), "lean-measure-work-"));
 
 const up = await boot("upstream");
 const ln = await boot("lean");
+
+// Scoped variant: what a session with enabledModels configured sees. Offline
+// the registry is empty (upstream's catalog collapses to "none discovered");
+// these 10 synthetic models stand in for the user's enabled set.
+const m = (
+	provider: string,
+	id: string,
+	reasoning: boolean,
+	input: string[],
+	contextWindow: number,
+	maxTokens: number,
+) => ({
+	model: {
+		provider,
+		id,
+		reasoning,
+		input,
+		contextWindow,
+		maxTokens,
+		thinkingLevelMap: { minimal: null, low: "low", medium: "medium", high: "high" },
+	},
+});
+const scopedCtx = makeCtx(freshWork, {
+	scopedModels: [
+		m("llama.cpp", "unsloth/gpt-oss-20b-GGUF:Q4_K_XL", false, ["text"], 33_000, 33_000),
+		m("llama.cpp", "unsloth/qwen3-30b-a3b-GGUF:Q4_K_XL", true, ["text"], 33_000, 33_000),
+		m("opencode-zen", "deepseek-v4-flash", true, ["text"], 1_000_000, 384_000),
+		m("opencode-zen", "deepseek-v4-pro", true, ["text"], 1_000_000, 384_000),
+		m("opencode-zen", "kimi-k3", true, ["text", "image"], 1_000_000, 131_000),
+		m("opencode-zen", "minimax-m3", true, ["text", "image"], 512_000, 128_000),
+		m("zai", "glm-5.3", true, ["text", "image"], 262_000, 131_000),
+		m("zai", "glm-5.3-flash", true, ["text", "image"], 262_000, 131_000),
+		m("zai", "glm-5.2", true, ["text"], 200_000, 64_000),
+		m("zai", "glm-5-turbo", true, ["text"], 200_000, 64_000),
+	],
+});
+const lnScoped = await boot("lean", scopedCtx);
 
 const width = [26, 56, 56];
 const line = (row: string[]) => {
@@ -110,5 +147,12 @@ for (const row of rows) {
 	line(row);
 	if (row[0].startsWith("TOTAL")) console.log("-".repeat(width.reduce((a, b) => a + b + 2, 0)));
 }
+
+console.log(`\nlean with model scoping (ctx.scopedModels = 10 enabled models):`);
+line([
+	"  guidelines",
+	`${lnScoped.guidelineCount} rules / ${lnScoped.guidelineTokens} tokens`,
+	`(unscoped lean: ${ln.guidelineCount} rules / ${ln.guidelineTokens} tokens; offline baseline carries a "none discovered" catalog — in real sessions the scoped list replaces upstream's full catalog line instead)`,
+]);
 
 rmSync(freshWork, { recursive: true, force: true });
