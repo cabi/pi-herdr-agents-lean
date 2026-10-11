@@ -1,0 +1,222 @@
+{
+  "generatedAt": "2026-10-11T14:16:04.574Z",
+  "upstreamVersion": "3.2.1",
+  "scenario": "child",
+  "note": "promptGuidelines for `subagent` are captured at registration; upstream splices the same live array at session_start (adds the authenticated model catalog as the last line and swaps the model-choice bullets when task preferences exist).",
+  "registrationCalls": [
+    {
+      "kind": "event",
+      "event": "session_start"
+    },
+    {
+      "kind": "event",
+      "event": "session_shutdown"
+    },
+    {
+      "kind": "tool",
+      "name": "subagent_send"
+    },
+    {
+      "kind": "tool",
+      "name": "subagent_stop"
+    },
+    {
+      "kind": "tool",
+      "name": "subagent_cancel"
+    },
+    {
+      "kind": "tool",
+      "name": "subagents_list"
+    },
+    {
+      "kind": "tool",
+      "name": "subagent_resume"
+    },
+    {
+      "kind": "command",
+      "name": "worktree"
+    },
+    {
+      "kind": "command",
+      "name": "subagent"
+    },
+    {
+      "kind": "renderer",
+      "name": "subagent_result"
+    },
+    {
+      "kind": "renderer",
+      "name": "subagent_status"
+    },
+    {
+      "kind": "renderer",
+      "name": "subagent_ping"
+    }
+  ],
+  "tools": [
+    {
+      "name": "subagent_send",
+      "label": "Send Persistent Task",
+      "description": "Deliver one follow-up task to an idle persistent specialist. Busy specialists reject tasks; no queue is kept.",
+      "descriptionChars": 109,
+      "promptSnippet": null,
+      "promptSnippetChars": 0,
+      "promptGuidelines": null,
+      "promptGuidelinesChars": 0,
+      "parameters": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "id": {
+            "description": "Exact persistent specialist logical ID",
+            "type": "string"
+          },
+          "name": {
+            "description": "Exact unambiguous persistent specialist name",
+            "type": "string"
+          },
+          "message": {
+            "description": "The next task",
+            "type": "string"
+          }
+        }
+      },
+      "parametersChars": 277,
+      "outputSchema": null,
+      "outputSchemaChars": 0,
+      "executionMode": null,
+      "hasPrepareArguments": false,
+      "hasRenderCall": false,
+      "hasRenderResult": false,
+      "totalStaticChars": 386
+    },
+    {
+      "name": "subagent_stop",
+      "label": "Stop Persistent Specialist",
+      "description": "Gracefully stop a persistent specialist after its active task settles. Exit is confirmed before the specialist is removed.",
+      "descriptionChars": 122,
+      "promptSnippet": null,
+      "promptSnippetChars": 0,
+      "promptGuidelines": null,
+      "promptGuidelinesChars": 0,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Exact persistent specialist logical ID",
+            "type": "string"
+          },
+          "name": {
+            "description": "Exact unambiguous persistent specialist name",
+            "type": "string"
+          }
+        }
+      },
+      "parametersChars": 196,
+      "outputSchema": null,
+      "outputSchemaChars": 0,
+      "executionMode": null,
+      "hasPrepareArguments": false,
+      "hasRenderCall": false,
+      "hasRenderResult": false,
+      "totalStaticChars": 318
+    },
+    {
+      "name": "subagent_cancel",
+      "label": "Cancel Subagent",
+      "description": "Cancel a running ordinary (non-persistent) Pi-backed subagent, including an interrupted one: records terminal intent first, terminates its owned process, and delivers exactly one cancelled result. No model fallback, retry, or recovery starts after a cancel. An ordinary pane is closed; a managed-worktree child stops only its Pi process and keeps the workspace, checkout, commits, and manifest. Returns confirmed, requested (launch still in flight), unconfirmed (the run stays live; call again to retry), or already-terminal. Persistent specialists are rejected; use subagent_stop. Do not poll: the cancelled result arrives automatically.",
+      "descriptionChars": 638,
+      "promptSnippet": "Cancel a running ordinary (non-persistent) Pi-backed subagent, including an interrupted one: records terminal intent first, terminates its owned process, and delivers exactly one cancelled result. No model fallback, retry, or recovery starts after a cancel. An ordinary pane is closed; a managed-worktree child stops only its Pi process and keeps the workspace, checkout, commits, and manifest. Returns confirmed, requested (launch still in flight), unconfirmed (the run stays live; call again to retry), or already-terminal. Persistent specialists are rejected; use subagent_stop. Do not poll: the cancelled result arrives automatically.",
+      "promptSnippetChars": 638,
+      "promptGuidelines": null,
+      "promptGuidelinesChars": 0,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Exact running subagent id",
+            "type": "string"
+          },
+          "name": {
+            "description": "Exact unambiguous running subagent display name",
+            "type": "string"
+          }
+        }
+      },
+      "parametersChars": 186,
+      "outputSchema": null,
+      "outputSchemaChars": 0,
+      "executionMode": null,
+      "hasPrepareArguments": false,
+      "hasRenderCall": true,
+      "hasRenderResult": true,
+      "totalStaticChars": 1462
+    },
+    {
+      "name": "subagents_list",
+      "label": "List Subagents",
+      "description": "List all available package, global, and project subagent definitions. Project agents override global definitions, which override package definitions.",
+      "descriptionChars": 149,
+      "promptSnippet": "List all available package, global, and project subagent definitions. Project agents override global definitions, which override package definitions.",
+      "promptSnippetChars": 149,
+      "promptGuidelines": null,
+      "promptGuidelinesChars": 0,
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "parametersChars": 33,
+      "outputSchema": null,
+      "outputSchemaChars": 0,
+      "executionMode": null,
+      "hasPrepareArguments": false,
+      "hasRenderCall": false,
+      "hasRenderResult": true,
+      "totalStaticChars": 331
+    },
+    {
+      "name": "subagent_resume",
+      "label": "Resume Subagent",
+      "description": "Resume a previous Pi-backed sub-agent session in a new herdr pane. This does not reattach a retained managed worktree; continue worktree-bound follow-up in its existing workspace. This is a fire-and-forget async tool: the call returns immediately with only an acknowledgement. When the resumed sub-agent finishes, the harness AUTOMATICALLY delivers its result as a steer message that wakes you up and starts a new turn — you do not need to do anything to receive it. DO NOT write polling loops, sleep/wait commands, tail/watch scripts, or repeatedly read session/log files to detect completion. DO NOT poll for status. All of that is wasted work — the harness handles delivery for you. DO NOT fabricate or assume results. After resuming, either end your turn or work on other independent tasks; the harness will wake you when the result is ready. Use when a sub-agent was cancelled or needs follow-up work.",
+      "descriptionChars": 906,
+      "promptSnippet": "Resume a previous Pi-backed sub-agent session in a new herdr pane. This does not reattach a retained managed worktree; continue worktree-bound follow-up in its existing workspace. This is a fire-and-forget async tool: the call returns immediately with only an acknowledgement. When the resumed sub-agent finishes, the harness AUTOMATICALLY delivers its result as a steer message that wakes you up and starts a new turn — you do not need to do anything to receive it. DO NOT write polling loops, sleep/wait commands, tail/watch scripts, or repeatedly read session/log files to detect completion. DO NOT poll for status. All of that is wasted work — the harness handles delivery for you. DO NOT fabricate or assume results. After resuming, either end your turn or work on other independent tasks; the harness will wake you when the result is ready. Use when a sub-agent was cancelled or needs follow-up work.",
+      "promptSnippetChars": 906,
+      "promptGuidelines": null,
+      "promptGuidelinesChars": 0,
+      "parameters": {
+        "type": "object",
+        "required": [
+          "sessionPath"
+        ],
+        "properties": {
+          "sessionPath": {
+            "description": "Path to the session .jsonl file to resume",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name for the terminal tab. Default: 'Resume'",
+            "type": "string"
+          },
+          "message": {
+            "description": "Optional message to send after resuming (e.g. follow-up instructions)",
+            "type": "string"
+          },
+          "autoExit": {
+            "description": "Whether the resumed session should automatically exit after completing its response. Defaults to true for autonomous follow-up work; set false for interactive resumed sessions.",
+            "type": "boolean"
+          }
+        }
+      },
+      "parametersChars": 580,
+      "outputSchema": null,
+      "outputSchemaChars": 0,
+      "executionMode": null,
+      "hasPrepareArguments": false,
+      "hasRenderCall": true,
+      "hasRenderResult": true,
+      "totalStaticChars": 2392
+    }
+  ]
+}
