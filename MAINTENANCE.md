@@ -64,7 +64,7 @@ Merged-tool schema decisions: `op` is a plain string (not an enum, not required)
 ## Fill-in rules (deliberately conservative)
 
 - `op`: trim/quotes, lowercase, spaces/dashes → underscores, repeated `subagent(s)(_)` prefix stripped, exact/underscore-flattened/prefix match against **this session's** ops. A missing `op` is inferred only from unambiguous signatures: `about` → help, `sessionPath` → resume, `target`/`preserve` → worktree_remove, `args`/`tasks`/`tasksMeta` → write_task_models, `message` without `id`/`name` → send, empty args → the sole registered zero-arg op (list in child sessions). `id`/`name` alone matches four ops → clear error.
-- `subagent` (spawn): non-empty string `worktree` → `{branch}`; array `skills`/`tools` → comma-joined; `thinking` lowercased when that matches the enum; `op` ∈ {spawn, subagent, create, start} dropped; any other `op` → `[E_LEAN_OP]` pointing at `subagent_ops`.
+- `subagent` (spawn): null-ish `worktree` (JSON null, "null", "none", "undefined", "") dropped; non-empty string `worktree` → `{branch}`; array `skills`/`tools` → comma-joined; `thinking` lowercased when that matches the enum; `op` ∈ {spawn, subagent, create, start} dropped; any other `op` → `[E_LEAN_OP]` pointing at `subagent_ops`.
 
 ## How to upgrade
 
