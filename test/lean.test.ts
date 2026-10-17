@@ -1,6 +1,6 @@
 /**
  * Tests for pi-herdr-agents-lean. Runs the real upstream extension
- * (pi-herdr-agents@3.2.1) against the harness through the lean wrapper.
+ * (pi-herdr-agents@3.3.0) against the harness through the lean wrapper.
  *
  * Covers: registration surface, op forwarding (every op reaches upstream,
  * lean-only fields stripped, write_task_models args merged), help content,

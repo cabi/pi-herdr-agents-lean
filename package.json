@@ -21,7 +21,7 @@
     "measure": "tsx scripts/measure.ts"
   },
   "dependencies": {
-    "pi-herdr-agents": "3.2.1"
+    "pi-herdr-agents": "3.3.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

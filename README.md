@@ -6,7 +6,7 @@ A token-lean wrapper around [pi-herdr-agents](https://github.com/giuseppecrj/pi-
 
 The lean-wrapper approach comes from [Make your own lean version](https://github.com/kunkun9527/my-lean-pi-setup/blob/main/docs/make-your-own-lean.md) in [kunkun9527/my-lean-pi-setup](https://github.com/kunkun9527/my-lean-pi-setup) — the source of the idea, with the reasoning and side-by-side examples in the article [Cut 91% of your tool prompts: a practical guide for Pi Agent users and extension authors](https://dev.to/shengkai_su/cut-91-of-your-tool-prompts-a-practical-guide-for-pi-agent-users-and-extension-authors-4jo9).
 
-Every upstream feature is kept exactly as-is — same commands, same renderers, same events, same execute behavior. Upstream is installed as a pinned, exact-version dependency (`pi-herdr-agents@3.2.1`); no upstream code is copied or modified. The only change is what the model reads on every request: tool descriptions, parameter schemas, snippets, and guidelines are re-worded and deduplicated, and nine rarely-used tools are merged into one.
+Every upstream feature is kept exactly as-is — same commands, same renderers, same events, same execute behavior. Upstream is installed as a pinned, exact-version dependency (`pi-herdr-agents@3.3.0`); no upstream code is copied or modified. The only change is what the model reads on every request: tool descriptions, parameter schemas, snippets, and guidelines are re-worded and deduplicated, and nine rarely-used tools are merged into one.
 
 ## How it works
 
