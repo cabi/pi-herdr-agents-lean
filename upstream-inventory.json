@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-31T18:21:25.711Z",
-  "upstreamVersion": "3.7.1",
+  "generatedAt": "2026-10-31T19:27:25.454Z",
+  "upstreamVersion": "3.7.2",
   "scenario": "parent",
   "note": "promptGuidelines for `subagent` are captured at registration; upstream splices the same live array at session_start (adds the authenticated model catalog as the last line and swaps the model-choice bullets when task preferences exist).",
   "registrationCalls": [
