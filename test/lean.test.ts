@@ -1,14 +1,14 @@
 /**
  * Tests for pi-herdr-agents-lean. Runs the real upstream extension
- * (pi-herdr-agents@3.3.1) against the harness through the lean wrapper.
+ * (pi-herdr-agents@3.7.0) against the harness through the lean wrapper.
  *
  * Covers: registration surface, op forwarding (every op reaches upstream,
  * lean-only fields stripped, write_task_models args merged), help content,
  * fill-in canonicalization (and its refusal to guess), spawn fill-ins,
  * upstream-schema validation order, tool-list stability across
  * upstream-schema validation order, tool-list stability across
- * session_start, blocked setActiveTools, the scoped model catalog
- * (enabledModels), and the subagent-child scenario.
+ * session_start, blocked setActiveTools, the model catalog and roster rule
+ * carried from upstream, and the subagent-child scenario.
  */
 
 import { readFileSync } from "node:fs";
@@ -22,6 +22,7 @@ import lean, {
 	__stubCapturedDefForTests,
 	makeUpstreamPi,
 } from "../src/index.ts";
+import { leanSubagentGuidelines } from "../src/lean-text.ts";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const inventory = JSON.parse(readFileSync(join(root, "upstream-inventory.json"), "utf8"));
@@ -149,12 +150,16 @@ describe("registration (parent session)", () => {
 				(s: any) => s.type === "string" && s.minLength === 1,
 			),
 		).toBe(true);
+		// accept keeps its structure (required run, bounds) with one compact
+		// lean description covering semantics the stripped sub-fields lose.
+		expect(typeof subagent.parameters.properties.accept?.description).toBe("string");
+		expect(subagent.parameters.properties.accept.required).toEqual(["run"]);
 		const withDescription = Object.entries(subagent.parameters.properties)
 			.filter(([, p]: any) => p.description)
 			.map(([k]) => k);
 		for (const key of withDescription) {
 			expect(
-				["agent", "skills", "tools", "cwd", "fork", "persistent", "interactive"],
+				["agent", "skills", "tools", "cwd", "fork", "persistent", "interactive", "accept"],
 			).toContain(key);
 		}
 
@@ -453,149 +458,37 @@ describe("tool list stability", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Scoped model catalog (enabledModels / --models)
+// Model catalog and roster in guidelines
 // ---------------------------------------------------------------------------
 
-describe("scoped model catalog", () => {
-	const scopedModel = (over: Record<string, unknown> = {}) => ({
-		provider: "zai",
-		id: "glm-5.3-flash",
-		reasoning: true,
-		input: ["text"],
-		contextWindow: 128_000,
-		maxTokens: 32_768,
-		// minimal unsupported (null); xhigh/max unmapped → excluded
-		thinkingLevelMap: { minimal: null, low: "low", medium: "medium", high: "high" },
-		...over,
-	});
-
-	it("replaces the upstream catalog with the scoped list when ctx.scopedModels is set", async () => {
+describe("guidelines carry upstream's catalog verbatim", () => {
+	it("keeps the upstream catalog line (upstream scopes it to session models since 3.6.0)", async () => {
 		const harness = bootParent();
-		await harness.emit(
-			"session_start",
-			{},
-			makeCtx(join(root, "test"), {
-				scopedModels: [
-					{ model: scopedModel() },
-					{ model: scopedModel() }, // duplicate ref → listed once
-					{ model: scopedModel({ id: "glm-5.3" }) },
-					{
-						model: scopedModel({
-							provider: "opencode-zen",
-							id: "deepseek-v4-flash",
-							input: ["text", "image"],
-							contextWindow: 1_000_000,
-							maxTokens: 384_000,
-						}),
-					},
-					{
-						model: scopedModel({
-							provider: "llama.cpp",
-							id: "unsloth/gpt-oss-20b-GGUF:Q4_K_XL",
-							reasoning: false,
-							contextWindow: undefined,
-							maxTokens: undefined,
-						}),
-					},
-					{ model: { provider: "zai" } }, // no id → dropped
-				],
-			}),
-		);
-
-		const guidelines = harness.tools.get("subagent").promptGuidelines as string[];
-		const joined = guidelines.join("\n");
-		expect(joined).toContain(
-			"Authenticated subagent models enabled in this session (use exact provider/model-id only):",
-		);
-		expect(joined).toContain(
-			"- llama.cpp/unsloth/gpt-oss-20b-GGUF:Q4_K_XL — non-reasoning, text",
-		);
-		expect(joined).toContain(
-			"- opencode-zen/deepseek-v4-flash — reasoning (off/low/medium/high), text+image, 1000k context, 384k max output",
-		);
-		expect(joined).toContain(
-			"- zai/glm-5.3-flash — reasoning (off/low/medium/high), text, 128k context, 33k max output",
-		);
-		expect(joined.match(/- zai\/glm-5\.3-flash —/g)?.length).toBe(1);
-
-		// sorted by provider/id
-		const llama = joined.indexOf("- llama.cpp/");
-		const deepseek = joined.indexOf("- opencode-zen/");
-		const zai = joined.indexOf("- zai/");
-		expect(llama).toBeGreaterThanOrEqual(0);
-		expect(deepseek).toBeGreaterThan(llama);
-		expect(zai).toBeGreaterThan(deepseek);
-
-		// upstream's own catalog (empty registry → "none discovered") not carried
-		expect(joined).not.toContain("none discovered");
-		// and the tool list is still exactly the lean pair
-		expect([...harness.tools.keys()]).toEqual(["subagent", "subagent_ops"]);
-	});
-
-	it("rebuilds upstream task-category shortlists from the scoped set", async () => {
-		const harness = bootParent();
-		__stubCapturedDefForTests("subagent", {
-			promptGuidelines: [
-				"Coordinate subagent work.",
-				"Authenticated subagent models (use exact provider/model-id only):\n- opencode/gemini-3-flash — reasoning (off/low), text, 128k context, 64k max output\n- opencode/claude-haiku-4-5 — reasoning (off/low/medium/high), text+image, 200k context, 64k max output\nTask-category shortlists (use task:<category> only as the entire model value):\n- coding: zai/glm-5.3, opencode/gpt-5.6-luna\n- review: opencode/claude-haiku-5-5, zai/glm-5.3-flash\n- qa: opencode/gpt-6-luna\nFor ordinary review, prefer a different authenticated model family.",
-			],
-		});
-		await harness.emit(
-			"session_start",
-			{},
-			makeCtx(join(root, "test"), {
-				scopedModels: [
-					{ model: scopedModel({ id: "glm-5.3" }) },
-					{ model: scopedModel() },
-				],
-			}),
-		);
-
-		const guidelines = harness.tools.get("subagent").promptGuidelines as string[];
-		const joined = guidelines.join("\n");
-		expect(joined).toContain("Task-category shortlists");
-		expect(joined).toContain("- coding: zai/glm-5.3\n");
-		expect(joined).toContain("- review: zai/glm-5.3-flash");
-		// non-scoped candidates and emptied categories are gone
-		expect(joined).not.toContain("opencode/gpt-5.6-luna");
-		expect(joined).not.toContain("opencode/claude-haiku");
-		expect(joined).not.toContain("- qa:");
-		// the note points at shortlists that are actually visible
-		expect(joined).toContain("Prefer the configured task-category shortlists");
-	});
-
-	it("drops the shortlists and their note when no configured candidate is scoped", async () => {
-		const harness = bootParent();
-		__stubCapturedDefForTests("subagent", {
-			promptGuidelines: [
-				"Authenticated subagent models (use exact provider/model-id only):\n- opencode/gemini-3-flash — reasoning (off/low), text\nTask-category shortlists (use task:<category> only as the entire model value):\n- coding: opencode/gpt-5.6-luna\n- review: opencode/claude-haiku-5-5",
-			],
-		});
-		await harness.emit(
-			"session_start",
-			{},
-			makeCtx(join(root, "test"), {
-				scopedModels: [{ model: scopedModel() }],
-			}),
-		);
-
-		const guidelines = harness.tools.get("subagent").promptGuidelines as string[];
-		const joined = guidelines.join("\n");
-		expect(joined).not.toContain("Task-category shortlists");
-		expect(joined).not.toContain("Prefer the configured task-category shortlists");
-		// the scoped catalog itself is still there
-		expect(joined).toContain("- zai/glm-5.3-flash —");
-	});
-
-	it("keeps the upstream catalog verbatim when no scoping is configured", async () => {
-		const harness = bootParent();
-		// default ctx has scopedModels: [] — no scoping configured
 		await harness.emit("session_start", {}, undefined);
 		const guidelines = harness.tools.get("subagent").promptGuidelines as string[];
 		const joined = guidelines.join("\n");
 		expect(joined).toContain("Authenticated subagent models");
-		expect(joined).toContain("none discovered");
-		expect(joined).not.toContain("enabled in this session");
+		expect(joined).toContain("none discovered"); // empty model registry in the harness
+	});
+});
+
+describe("roster rule follows upstream's group-naming guideline", () => {
+	it("prints the markdown table when upstream asks for one", async () => {
+		const harness = bootParent();
+		await harness.emit("session_start", {}, undefined);
+		const roster = (harness.tools.get("subagent").promptGuidelines as string[]).find(
+			(g) => g.startsWith("Name a new coordinated group"),
+		);
+		expect(roster).toContain("markdown table");
+		expect(roster).toContain("name | agent kind | role | model | worktree");
+	});
+
+	it("falls back gracefully when upstream has no roster guideline", () => {
+		const roster = leanSubagentGuidelines([
+			"Authenticated subagent models (use exact provider/model-id only):\nnone discovered",
+		]).find((g) => g.startsWith("Name a new coordinated group"));
+		expect(roster).toContain("use those names in prompts, handoffs, and results.");
+		expect(roster).not.toContain("print");
 	});
 });
 

@@ -67,9 +67,25 @@ function measure(active: string[], defs: Map<string, AnyDef>) {
 	};
 }
 
+/**
+ * Upstream 3.5+ registers through `Object.create(pi)` (withEncodedToolErrors);
+ * that derived object misses the harness's private fields, so every method
+ * upstream calls must be bound back to the real harness (same trick as
+ * makeUpstreamPi in src/index.ts).
+ */
+const bindApi = (api: Harness): never =>
+	new Proxy(api, {
+		get(target, prop) {
+			const value = Reflect.get(target, prop, target);
+			return typeof value === "function"
+				? (value as (...a: unknown[]) => unknown).bind(target)
+				: value;
+		},
+	}) as never;
+
 async function boot(kind: "upstream" | "lean", ctx?: Record<string, unknown>) {
 	const harness = new Harness(freshWork);
-	if (kind === "upstream") upstream(harness as never);
+	if (kind === "upstream") upstream(bindApi(harness));
 	else lean(harness as never);
 	await harness.emit("session_start", {}, ctx ?? makeCtx(freshWork));
 	return measure(harness.getActiveTools(), harness.tools as unknown as Map<string, AnyDef>);
@@ -152,7 +168,7 @@ console.log(`\nlean with model scoping (ctx.scopedModels = 10 enabled models):`)
 line([
 	"  guidelines",
 	`${lnScoped.guidelineCount} rules / ${lnScoped.guidelineTokens} tokens`,
-	`(unscoped lean: ${ln.guidelineCount} rules / ${ln.guidelineTokens} tokens; offline baseline carries a "none discovered" catalog — in real sessions the scoped list replaces upstream's full catalog line instead)`,
+	`(unscoped lean: ${ln.guidelineCount} rules / ${ln.guidelineTokens} tokens; upstream scopes the catalog itself since 3.6, so this line is upstream's own scoped catalog carried verbatim — offline the unscoped baseline collapses to "none discovered")`,
 ]);
 
 rmSync(freshWork, { recursive: true, force: true });

@@ -1,12 +1,16 @@
 {
-  "generatedAt": "2026-10-23T15:49:20.527Z",
-  "upstreamVersion": "3.3.1",
+  "generatedAt": "2026-10-31T16:57:33.388Z",
+  "upstreamVersion": "3.7.0",
   "scenario": "child",
   "note": "promptGuidelines for `subagent` are captured at registration; upstream splices the same live array at session_start (adds the authenticated model catalog as the last line and swaps the model-choice bullets when task preferences exist).",
   "registrationCalls": [
     {
       "kind": "event",
       "event": "session_start"
+    },
+    {
+      "kind": "events.on",
+      "name": "pi-herdr-agents:child-busy"
     },
     {
       "kind": "event",

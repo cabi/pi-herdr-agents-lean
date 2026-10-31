@@ -26,10 +26,12 @@
  * model-catalog line into the upstream guidelines) the lean tools are
  * re-registered under the same names with refreshed texts — the names the
  * model sees never change mid-session. When pi resolved model scoping
- * (enabledModels / --models) into ctx.scopedModels, the guidelines' model
- * catalog is rebuilt from that scoped set instead of upstream's
- * all-authenticated list, so children are only offered models the user
- * enabled.
+ * At session_start (after upstream's own handler has spliced the live
+ * model-catalog line into the upstream guidelines) the lean tools are
+ * re-registered under the same names with refreshed texts — the names the
+ * model sees never change mid-session. Upstream scopes that catalog to the
+ * session-enabled models itself (since 3.6.0), so the line is carried into
+ * the lean guidelines verbatim.
  */
 
 import type {
@@ -58,7 +60,6 @@ import {
 	leanOpsSchema,
 	leanOpsSnippet,
 	leanSubagentDescription,
-	buildScopedCatalog,
 	leanSubagentGuidelines,
 	leanSubagentSchema,
 	thinkingEnumOf,
@@ -331,7 +332,7 @@ async function subagentExecute(
 // Lean tool definitions
 // ---------------------------------------------------------------------------
 
-function buildLeanSubagentDef(scopedCatalog?: string | null): AnyToolDefinition | null {
+function buildLeanSubagentDef(): AnyToolDefinition | null {
 	const captured = latest.get("subagent");
 	if (!captured) return null;
 	const def: AnyToolDefinition = {
@@ -339,7 +340,7 @@ function buildLeanSubagentDef(scopedCatalog?: string | null): AnyToolDefinition 
 		label: captured.label ?? "Subagent",
 		description: leanSubagentDescription(),
 		promptSnippet: LEAN_SUBAGENT_SNIPPET,
-		promptGuidelines: leanSubagentGuidelines(captured.promptGuidelines, scopedCatalog),
+		promptGuidelines: leanSubagentGuidelines(captured.promptGuidelines),
 		parameters: leanSubagentSchema(captured.parameters),
 		prepareArguments: (args: unknown) =>
 			canonicalizeSpawnArgs(args, thinkingEnumOf(captured.parameters)),
@@ -371,25 +372,9 @@ function buildLeanOpsDef(): AnyToolDefinition | null {
 	};
 }
 
-/**
- * Scoped-model catalog for the guidelines: pi resolves enabledModels /
- * --models into ctx.scopedModels (empty when no scoping is configured).
- * Returns null then, keeping upstream's catalog line verbatim. The captured
- * upstream guidelines feed the shortlist rebuild: upstream's session_start
- * handler (registered before this re-register) has already spliced the
- * refreshed catalog, shortlists included, into that live array.
- */
-function scopedCatalogFrom(ctx: unknown): string | null {
-	const scoped = (ctx as { scopedModels?: unknown } | null | undefined)?.scopedModels;
-	if (!Array.isArray(scoped) || scoped.length === 0) return null;
-	return buildScopedCatalog(
-		scoped as Parameters<typeof buildScopedCatalog>[0],
-		latest.get("subagent")?.promptGuidelines,
-	);
-}
 
-function registerLeanTools(pi: ExtensionAPI, scopedCatalog?: string | null): void {
-	const spawn = buildLeanSubagentDef(scopedCatalog);
+function registerLeanTools(pi: ExtensionAPI): void {
+	const spawn = buildLeanSubagentDef();
 	if (spawn) pi.registerTool(spawn);
 	const ops = buildLeanOpsDef();
 	if (ops) pi.registerTool(ops);
@@ -414,7 +399,7 @@ export default function leanExtension(pi: ExtensionAPI): void {
 	// already spliced the live model catalog into its guidelines array.
 	// Re-registering replaces by name: the tool list itself never changes.
 	pi.on("session_start", async (_event, ctx) => {
-		registerLeanTools(pi, scopedCatalogFrom(ctx));
+		registerLeanTools(pi);
 	});
 }
 

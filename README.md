@@ -6,7 +6,7 @@ A token-lean wrapper around [pi-herdr-agents](https://github.com/giuseppecrj/pi-
 
 The lean-wrapper approach comes from [Make your own lean version](https://github.com/kunkun9527/my-lean-pi-setup/blob/main/docs/make-your-own-lean.md) in [kunkun9527/my-lean-pi-setup](https://github.com/kunkun9527/my-lean-pi-setup) — the source of the idea, with the reasoning and side-by-side examples in the article [Cut 91% of your tool prompts: a practical guide for Pi Agent users and extension authors](https://dev.to/shengkai_su/cut-91-of-your-tool-prompts-a-practical-guide-for-pi-agent-users-and-extension-authors-4jo9).
 
-Every upstream feature is kept exactly as-is — same commands, same renderers, same events, same execute behavior. Upstream is installed as a pinned, exact-version dependency (`pi-herdr-agents@3.3.1`); no upstream code is copied or modified. The only change is what the model reads on every request: tool descriptions, parameter schemas, snippets, and guidelines are re-worded and deduplicated, and nine rarely-used tools are merged into one.
+Every upstream feature is kept exactly as-is — same commands, same renderers, same events, same execute behavior. Upstream is installed as a pinned, exact-version dependency (`pi-herdr-agents@3.7.0`); no upstream code is copied or modified. The only change is what the model reads on every request: tool descriptions, parameter schemas, snippets, and guidelines are re-worded and deduplicated, and nine rarely-used tools are merged into one.
 
 ## How it works
 
@@ -19,7 +19,7 @@ The extension initializes upstream against a `Proxy` of Pi's extension API:
 - Everything else — slash commands (`/subagent`, `/subagents-init`, `/worktree`), message renderers (`subagent_ping`, `subagent_result`, `subagent_status`), session events — passes through untouched.
 - Calls still validate against the **captured upstream schema** before execute, so upstream's contract (required fields, enums, patterns) keeps holding even though the model only sees the lean schema.
 - `op: help` (with `about: <op>`) returns the full upstream description, parameter schema, snippet, and guidelines for that op, so nothing is lost — it's fetched on demand instead of prepaid on every request.
-- When Pi resolves model scoping (`enabledModels` / `--models`) into `ctx.scopedModels`, the guidelines' model catalog — including the task-category shortlists — is rebuilt from that scoped set instead of carried over. Upstream's catalog lists every authenticated model — disabled-at-provider ones included, truncated at 24 alphabetically — which invites spawning children that then fail with provider 403s. With no scoping configured, upstream's catalog line is carried verbatim.
+- The guidelines' model-catalog line is carried over verbatim: upstream scopes it to the session-enabled models (`enabledModels` / `--models`) itself since 3.6.0. The lean roster guideline follows upstream's own group-naming rule (the markdown roster table since 3.6.0, nothing when `guidelines.launchRoster` is off).
 
 The op set mirrors what upstream registered in this process: parent sessions get all ops; subagent child sessions (`PI_SUBAGENT_ID`) get the reduced child set; `PI_DENY_TOOLS` removes individual tools from both.
 
@@ -31,7 +31,7 @@ Measured with `npm run measure` (js-tiktoken `o200k_base`, parent session, sessi
 
 | per-tool declarations | upstream tokens | lean tokens |
 |---|---:|---:|
-| subagent | 1103 | 466 |
+| subagent | 1341 | 648 |
 | subagent_resume | 316 | |
 | subagents_write_task_models | 743 | |
 | subagent_cancel | 176 | |
@@ -45,12 +45,12 @@ Measured with `npm run measure` (js-tiktoken `o200k_base`, parent session, sessi
 
 | | upstream (10 tools) | lean (2 tools) |
 |---|---:|---:|
-| declarations | 13316 chars / 2780 tokens | 4335 chars / 993 tokens |
+| declarations | 14349 chars / 3018 tokens | 5062 chars / 1175 tokens |
 | snippets | 3555 chars / 715 tokens | 242 chars / 64 tokens |
-| guidelines | 8 rules / 577 tokens | 5 rules / 443 tokens |
-| **total** | **19825 chars / 4072 tokens** | **6879 chars / 1500 tokens** |
+| guidelines | 8 rules / 616 tokens | 5 rules / 464 tokens |
+| **total** | **20995 chars / 4349 tokens** | **7690 chars / 1703 tokens** |
 
-**Saved: 2572 tokens per request (63.2%).** The authenticated-model-catalog guideline line is carried over verbatim (it grows with your registry in real sessions, identically for both). With `enabledModels` configured, lean instead injects a catalog of just the enabled models — a list of 10 costs 653 tokens here, and replaces upstream's full catalog line in real sessions (`npm run measure` prints both variants).
+**Saved: 2646 tokens per request (60.8%).** The authenticated-model-catalog guideline line is carried over verbatim — upstream scopes it to the session-enabled models itself since 3.6.0, so with `enabledModels` configured both sides list exactly the enabled set (10 enabled models → 5 rules / 808 tokens here vs 464 unscoped offline; `npm run measure` prints both variants).
 
 ## Errors
 
@@ -81,8 +81,8 @@ Most upstream updates only change internal logic, so upgrading the dependency is
 ## Development
 
 ```sh
+npm test            # 35 tests: forwarding, help, fill-ins, stability, catalog + roster guidelines, child sessions
 npm install
-npm test            # 36 tests: forwarding, help, fill-ins, stability, scoped catalog + shortlists, child sessions
 npm run typecheck
 npm run inventory   # regenerate upstream-inventory.json (+ SCENARIO=child for the child file)
 npm run measure     # token table above

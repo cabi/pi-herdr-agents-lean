@@ -1,12 +1,16 @@
 {
-  "generatedAt": "2026-10-23T15:49:19.276Z",
-  "upstreamVersion": "3.3.1",
+  "generatedAt": "2026-10-31T16:57:32.138Z",
+  "upstreamVersion": "3.7.0",
   "scenario": "parent",
   "note": "promptGuidelines for `subagent` are captured at registration; upstream splices the same live array at session_start (adds the authenticated model catalog as the last line and swaps the model-choice bullets when task preferences exist).",
   "registrationCalls": [
     {
       "kind": "event",
       "event": "session_start"
+    },
+    {
+      "kind": "events.on",
+      "name": "pi-herdr-agents:child-busy"
     },
     {
       "kind": "event",
@@ -339,10 +343,10 @@
         "Use fast tier for bounded mechanical work and recon, mid tier for ordinary implementation or review, and frontier tier for architecture, security, hard diagnosis, or adversarial review. Use minimal/low thinking for mechanical work, medium for ordinary work, and high+ for hard work.",
         "For ordinary review, prefer a different authenticated model family. When no other authenticated model family is available, ordinary review may use a same-family reviewer in a fresh standalone session. Disclose that this review is context-isolated, not cross-family independent. Cross-family verification must not use this fallback. Use an exact authenticated provider/model-id from the live catalog below, never an alias or fuzzy name.",
         "Omitting model and thinking still inherits the parent runtime, but this is a discouraged fallback for orchestrated children.",
-        "Before launching a new group of subagents, choose a short task slug and name each new child <task>-<role>[-n], for example login-api or login-test2. Use only plan, research, ui, api, build, test, review, browser, security, perf, or merge as roles; leave existing names unchanged. After the final launch, print name | agent kind | role | model | worktree (if any), then use each name in prompts, handoffs, and results.",
+        "Before launching a new group of subagents, choose a short task slug and name each new child <task>-<role>[-n], for example login-api or login-test2. Use only plan, research, ui, api, build, test, review, browser, security, perf, or merge as roles; leave existing names unchanged. After the final launch, print a markdown table with the header row `| name | agent kind | role | model | worktree |`, the separator row `|---|---|---|---|---|`, and one row per child (worktree `none` when there is none), then use each name in prompts, handoffs, and results.",
         "Authenticated subagent model catalog becomes available after session start."
       ],
-      "promptGuidelinesChars": 2093,
+      "promptGuidelinesChars": 2230,
       "parameters": {
         "type": "object",
         "required": [
@@ -448,20 +452,54 @@
             "description": "Keep this stable specialist session alive between turn-based tasks. Persistent agents accept follow-up work only through subagent_send.",
             "type": "boolean"
           },
+          "accept": {
+            "description": "Optional accept check. The delivery carries `Check: <verdict>` from the closed set accepted, rejected, error, skipped, none. Only auto-exit, non-persistent children support it.",
+            "type": "object",
+            "required": [
+              "run"
+            ],
+            "properties": {
+              "run": {
+                "minLength": 1,
+                "description": "Shell command run with `sh -c`. Exit 0 passes. The child runs it before it finishes and retries on failure; then the host re-runs it in the child's checkout (the worktree for worktree children) and that run decides the verdict.",
+                "type": "string"
+              },
+              "maxRetries": {
+                "minimum": 0,
+                "maximum": 5,
+                "description": "Extra child turns after a failed check, each with the failing output. Default 1.",
+                "type": "integer"
+              },
+              "timeoutSec": {
+                "minimum": 1,
+                "maximum": 3600,
+                "description": "Per-run timeout in seconds. Default 600. A timeout is verdict `error`.",
+                "type": "integer"
+              },
+              "paths": {
+                "description": "Repo-relative check files (for example tests). The delivery reports any the child changed; the verdict is unchanged.",
+                "type": "array",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
           "interactive": {
             "description": "Mark the subagent as interactive (long-running, user drives the conversation in its own pane). When true, the main session is not woken by status transitions (stalled/recovered) for this subagent. If omitted, falls back to the agent's `interactive` frontmatter, otherwise the inverse of `auto-exit` (agents that auto-exit are autonomous and get stall pings; agents that don't are interactive and stay quiet).",
             "type": "boolean"
           }
         }
       },
-      "parametersChars": 3745,
+      "parametersChars": 4778,
       "outputSchema": null,
       "outputSchemaChars": 0,
       "executionMode": null,
       "hasPrepareArguments": false,
       "hasRenderCall": true,
       "hasRenderResult": true,
-      "totalStaticChars": 8874
+      "totalStaticChars": 10044
     },
     {
       "name": "subagent_send",
