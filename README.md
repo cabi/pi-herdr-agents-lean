@@ -7,7 +7,7 @@ A token-lean wrapper around [pi-herdr-agents](https://github.com/giuseppecrj/pi-
 The lean-wrapper approach comes from [Make your own lean version](https://github.com/kunkun9527/my-lean-pi-setup/blob/main/docs/make-your-own-lean.md) in [kunkun9527/my-lean-pi-setup](https://github.com/kunkun9527/my-lean-pi-setup) — the source of the idea, with the reasoning and side-by-side examples in the article [Cut 91% of your tool prompts: a practical guide for Pi Agent users and extension authors](https://dev.to/shengkai_su/cut-91-of-your-tool-prompts-a-practical-guide-for-pi-agent-users-and-extension-authors-4jo9).
 
 Every upstream feature is kept exactly as-is — same commands, same renderers, same events, same execute behavior. Upstream is installed as a pinned, exact-version dependency (`pi-herdr-agents@3.7.2`); no upstream code is copied or modified. The only change is what the model reads on every request: tool descriptions, parameter schemas, snippets, and guidelines are re-worded and deduplicated, and nine rarely-used tools are merged into one.
-
+Every upstream feature is kept exactly as-is — same commands, same renderers, same events, same execute behavior. Upstream is installed as a pinned, exact-version dependency (`pi-herdr-agents@3.8.0`); no upstream code is copied or modified. The only change is what the model reads on every request: tool descriptions, parameter schemas, snippets, and guidelines are re-worded and deduplicated, and nine rarely-used tools are merged into one. (Upstream 3.8.0 shrank its own texts considerably, so lean's relative savings are smaller than against 3.7.x — the wrapper still wins on every text.)
 ## How it works
 
 The extension initializes upstream against a `Proxy` of Pi's extension API:
@@ -15,7 +15,7 @@ The extension initializes upstream against a `Proxy` of Pi's extension API:
 - `registerTool` is intercepted. Upstream tool definitions are captured, never registered. Two lean tools are registered instead:
   - **`subagent`** — the hot-path spawn tool, kept standalone, with a lean description and schema (upstream's contract preserved: same required fields, same enums; plus a `worktree: "branch-name"` string shorthand).
   - **`subagent_ops`** — the nine remaining upstream tools merged behind an `op` parameter (list, interrupt, cancel, send, stop, resume, worktree_list, worktree_remove, write_task_models) plus `op: help`. Common parameters sit flat in the schema; write_task_models' parameters ride in `args` as a JSON string.
-- `setActiveTools` is blocked. Upstream never calls it today; the guard keeps the lean two-tool list fixed for the whole session in either case.
+- `setActiveTools` is blocked. Upstream 3.8.0 calls it (deferred-tool reachability at session_start, task-models writer activation); under lean both paths resolve without it, and the guard keeps the lean two-tool list fixed for the whole session regardless.
 - Everything else — slash commands (`/subagent`, `/subagents-init`, `/worktree`), message renderers (`subagent_ping`, `subagent_result`, `subagent_status`), session events — passes through untouched.
 - Calls still validate against the **captured upstream schema** before execute, so upstream's contract (required fields, enums, patterns) keeps holding even though the model only sees the lean schema.
 - `op: help` (with `about: <op>`) returns the full upstream description, parameter schema, snippet, and guidelines for that op, so nothing is lost — it's fetched on demand instead of prepaid on every request.
@@ -31,26 +31,27 @@ Measured with `npm run measure` (js-tiktoken `o200k_base`, parent session, sessi
 
 | per-tool declarations | upstream tokens | lean tokens |
 |---|---:|---:|
-| subagent | 1341 | 648 |
-| subagent_resume | 316 | |
-| subagents_write_task_models | 743 | |
-| subagent_cancel | 176 | |
-| subagent_interrupt | 97 | |
+| subagent | 928 | 591 |
+| subagent_resume | 173 | |
+| subagent_cancel | 146 | |
 | subagent_send | 88 | |
-| subagent_stop | 70 | |
-| worktree_remove | 95 | |
-| worktree_list | 48 | |
-| subagents_list | 44 | |
-| subagent_ops (merged) | | 527 |
+| worktree_remove | 93 | |
+| subagent_interrupt | 72 | |
+| subagent_stop | 59 | |
+| worktree_list | 35 | |
+| subagents_list | 35 | |
+| subagent_ops (merged) | | 531 |
 
-| | upstream (10 tools) | lean (2 tools) |
+Upstream registers `subagents_write_task_models` with `defaultActive: false` since 3.8.0 (activated only through `/subagents-init`), so it no longer counts toward upstream's active declarations; under lean it stays available as an op of `subagent_ops`.
+
+| | upstream (9 active tools) | lean (2 tools) |
 |---|---:|---:|
-| declarations | 14349 chars / 3018 tokens | 5062 chars / 1175 tokens |
-| snippets | 3555 chars / 715 tokens | 242 chars / 64 tokens |
-| guidelines | 8 rules / 616 tokens | 5 rules / 464 tokens |
-| **total** | **20995 chars / 4349 tokens** | **7690 chars / 1703 tokens** |
+| declarations | 7570 chars / 1629 tokens | 4812 chars / 1122 tokens |
+| snippets | 485 chars / 108 tokens | 242 chars / 64 tokens |
+| guidelines | 7 rules / 375 tokens | 5 rules / 323 tokens |
+| **total** | **9812 chars / 2112 tokens** | **6636 chars / 1509 tokens** |
 
-**Saved: 2646 tokens per request (60.8%).** The authenticated-model-catalog guideline line is carried over verbatim — upstream scopes it to the session-enabled models itself since 3.6.0, so with `enabledModels` configured both sides list exactly the enabled set (10 enabled models → 5 rules / 808 tokens here vs 464 unscoped offline; `npm run measure` prints both variants).
+**Saved: 603 tokens per request (28.6%).** The authenticated-model-catalog guideline line is carried over verbatim — upstream scopes it to the session-enabled models itself since 3.6.0, so with a live registry both sides list exactly the enabled set (10 enabled models → upstream 5 rules / 667 tokens vs 375 unscoped offline; `npm run measure` prints both variants).
 
 ## Errors
 

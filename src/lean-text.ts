@@ -19,8 +19,7 @@ import type { SubagentOp } from "./ops.ts";
 
 export function leanSubagentDescription(): string {
 	return [
-		"Spawn a sub-agent in a dedicated pane, or in an isolated managed Git worktree when `worktree` is set. Fire-and-forget: the call returns an acknowledgement immediately and the result arrives later as a steer message that starts a new turn — end the turn or do other work in the meantime; don't poll for completion (loops, sleep, tail, status checks) and don't fabricate results.",
-		"Ordinary panes for read-only tasks; a single sequential writer can work in the parent checkout. Parallel independent writers each get a worktree branched from committed HEAD, so uncommitted parent changes are not copied. A finished worktree run keeps its workspace for review (nothing is pushed, merged, or removed); inspect it by spawning a read-only agent with `cwd` set to that worktree path rather than creating a new worktree.",
+		"Spawn a sub-agent in a dedicated pane, or an isolated managed worktree when `worktree` is set. Plain panes suit read-only work and a single sequential writer; parallel independent writers each get a worktree from committed HEAD (uncommitted parent changes not copied), kept for review and inspected with a read-only agent (`cwd` at its path). Fire-and-forget: the result arrives later as a steer message that starts a new turn — end the turn or do other work; don't poll (loops, sleep, tail, status checks) or fabricate results.",
 	].join("\n\n");
 }
 
@@ -112,7 +111,7 @@ export function leanSubagentSchema(upstreamSchema: any): any {
 // ---------------------------------------------------------------------------
 
 const OPS_BULLETS: Record<Exclude<SubagentOp, "help">, string> = {
-	list: "list package, global, and project agent definitions (project overrides global, which overrides package)",
+	list: "list subagent role definitions (project overrides global, which overrides package), live persistent specialists, and the supervision mode",
 	interrupt: "send Escape to a running subagent's active turn (`id` or `name`); pane, session, and entry stay alive",
 	cancel: "cancel a running ordinary subagent (`id` or `name`); one cancelled result is delivered, no retry or recovery; persistent specialists need `stop`",
 	send: "deliver one follow-up task (`message`, plus `id` or `name`) to an idle persistent specialist; busy ones reject it and nothing is queued",

@@ -12,8 +12,10 @@
  *   `op` parameter plus `help`) — with lean descriptions/schemas while
  *   execute/render plumbing forwards to the captured definitions.
  * - `setActiveTools` is intercepted and blocked: the lean tool list is
- *   registered once and stays fixed for the whole session. Upstream never
- *   calls it today; the guard keeps that true after upgrades.
+ *   registered once and stays fixed for the whole session. Upstream 3.8.0
+ *   calls it for deferred-tool reachability and task-model writer
+ *   activation; under lean both paths resolve without it (see
+ *   makeUpstreamPi), so the guard holds the lean surface anyway.
  * - everything else (slash commands, message renderers, session events,
  *   pi.events subscriptions) passes through to the real pi object
  *   unchanged, so every non-tool feature behaves exactly like upstream.
@@ -92,6 +94,13 @@ export function makeUpstreamPi(pi: ExtensionAPI): ExtensionAPI {
 			if (prop === "setActiveTools") {
 				// Block tool-list mutations: the lean pair is registered once and
 				// must stay the surface the model sees for the whole session.
+				// Upstream 3.8.0 calls this (deferred-tool reachability at
+				// session_start, task-models writer activation); under lean the
+				// reachability check finds none of its own registrations alive
+				// (identity of the parameters object never matches the rebuilt
+				// lean schemas) and returns early, and the blocked writer
+				// activation makes /subagents-init report a clear cancel, so
+				// both call sites are neutralized without this guard firing.
 				return (_names: string[]) => {
 					// Deliberately not forwarded.
 				};

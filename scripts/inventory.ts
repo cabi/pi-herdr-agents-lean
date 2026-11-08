@@ -127,6 +127,8 @@ const inventory = {
 		outputSchema: def.outputSchema ?? null,
 		outputSchemaChars: chars(def.outputSchema),
 		executionMode: def.executionMode ?? null,
+		exposure: def.exposure ?? null,
+		defaultActive: def.defaultActive ?? null,
 		hasPrepareArguments: def.prepareArguments?.__fn === true,
 		hasRenderCall: def.renderCall?.__fn === true,
 		hasRenderResult: def.renderResult?.__fn === true,

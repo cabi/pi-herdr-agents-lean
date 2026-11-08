@@ -94,6 +94,17 @@ export class Harness {
     return [...this.active];
   }
 
+  /**
+   * Tool defs pi's getAllTools() would report: each registered definition
+   * (name, parameters, exposure, …). Upstream 3.8.0's deferred-tool
+   * reachability check identity-compares `parameters` against the schemas it
+   * registered; under lean those never reach this map, so the check resolves
+   * to "none" without touching setActiveTools.
+   */
+  getAllTools(): any[] {
+    return [...this.tools.values()];
+  }
+
   setActiveTools(names: string[]) {
     this.active = [...names];
     this.setActiveCalls++;
