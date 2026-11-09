@@ -602,4 +602,30 @@ describe("in-process owner guard", () => {
 
 		__resetLeanStateForTests();
 	});
+	it("a secondary in-process load must not re-capture upstream or register herdr surface", async () => {
+		__resetLeanStateForTests();
+		setEnv({ PI_SUBAGENT_ID: undefined, PI_DENY_TOOLS: undefined });
+		const ownerHarness = new Harness(join(root, "test"));
+		const childHarness = new Harness(join(root, "test"));
+
+		lean(ownerHarness as any);
+
+		// Mark the owner's captured spawn definition so a later re-capture
+		// (the stale-ctx bug) would discard the marker.
+		const calls: Array<{ tool: string; args: any }> = [];
+		stubForward("subagent", calls);
+
+		lean(childHarness as any);
+
+		// The child bind registers no herdr surface at all.
+		expect([...childHarness.tools.keys()]).toEqual([]);
+
+		// The owner's captured definitions survive the child bind: a spawn
+		// still forwards to the owner-marked definition, not to one
+		// re-captured over the child's disposable ctx.
+		await ownerHarness.callTool("subagent", { name: "worker", task: "do it" });
+		expect(calls.length).toBe(1);
+
+		__resetLeanStateForTests();
+	});
 });

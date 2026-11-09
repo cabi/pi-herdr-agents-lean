@@ -16,6 +16,15 @@
  *   calls it for deferred-tool reachability and task-model writer
  *   activation; under lean both paths resolve without it (see
  *   makeUpstreamPi), so the guard holds the lean surface anyway.
+ * - secondary in-process loads return before touching upstream: only the
+ *   first (owner) session initializes upstream and populates the capture
+ *   map. A foreign in-process bind (e.g. pi-maestro's SDK children, which
+ *   bind the same extensions) would otherwise re-run upstream's init and
+ *   re-capture every definition over the foreign session's ctx; once that
+ *   child session is disposed, pi invalidates its ctx and the owner's
+ *   forwarding would fail every spawn with a stale-ctx error. The secondary
+ *   load registers no herdr surface into its own session either —
+ *   pane-spawning nested inside a delegated role child is unsupported.
  * - `on` is intercepted for `session_shutdown` ownership: upstream keeps its
  *   runtime (session handle, running map, held deliveries) in module-global
  *   state shared by every session that loads it in this process, and its
@@ -451,8 +460,24 @@ function registerLeanTools(pi: ExtensionAPI): void {
 export default function leanExtension(pi: ExtensionAPI): void {
 	const isOwner = !upstreamOwnerActive;
 	if (isOwner) upstreamOwnerActive = true;
+
+	if (!isOwner) {
+		// Secondary in-process session (e.g. a pi-maestro SDK child binding the
+		// same extensions in this process): running upstream() again would
+		// re-initialize its module-global runtime against THIS session's ctx
+		// and overwrite `latest` with definitions captured over it. When this
+		// child session is later disposed, pi invalidates its ctx — and the
+		// owner session's lean tools would then forward into those stale
+		// definitions, failing every spawn with "This extension ctx is stale
+		// after session replacement or reload". Skip the re-init entirely: the
+		// owner keeps its captured definitions and runtime state, and this
+		// child registers no herdr surface (pane-spawning nested inside a
+		// delegated in-process role child is not a supported configuration).
+		return;
+	}
+
 	realPi = pi;
-	const upstreamPi = makeUpstreamPi(pi, { owner: isOwner });
+	const upstreamPi = makeUpstreamPi(pi, { owner: true });
 
 	// Upstream registers its tools (captured), commands, renderers, and
 	// event handlers here.
