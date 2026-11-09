@@ -16,6 +16,17 @@
  *   calls it for deferred-tool reachability and task-model writer
  *   activation; under lean both paths resolve without it (see
  *   makeUpstreamPi), so the guard holds the lean surface anyway.
+ * - `on` is intercepted for `session_shutdown` ownership: upstream keeps its
+ *   runtime (session handle, running map, held deliveries) in module-global
+ *   state shared by every session that loads it in this process, and its
+ *   shutdown handler tears that state down on any non-preserving reason.
+ *   The first session to load the extension here owns the process state;
+ *   secondary in-process loads (e.g. pi-maestro's SDK children, which bind
+ *   the same extensions) get their upstream `session_shutdown`
+ *   registration dropped, so closing the child cannot null the owner's
+ *   runtime.session, abort its running subagents, or release its held
+ *   deliveries. The owner's handler runs unchanged and releases the claim,
+ *   so a replacement session after reload/new/resume re-owns the process.
  * - everything else (slash commands, message renderers, session events,
  *   pi.events subscriptions) passes through to the real pi object
  *   unchanged, so every non-tool feature behaves exactly like upstream.
@@ -74,6 +85,14 @@ const latest = new Map<string, AnyToolDefinition>();
 
 let realPi: ExtensionAPI | null = null;
 
+/**
+ * Ownership of upstream's module-global runtime state for this process.
+ * True from the first `leanExtension` load until that owner session's
+ * `session_shutdown` handler has run (any reason). See the header and
+ * makeUpstreamPi for the guard built on it.
+ */
+let upstreamOwnerActive = false;
+
 /** Ops available here: one per captured tool plus help. */
 function availableOps(): SubagentOp[] {
 	return ALL_OPS.filter((op) => op === "help" || latest.has(toolForOp(op)!));
@@ -83,7 +102,10 @@ function availableOps(): SubagentOp[] {
 // Proxy around the pi object handed to upstream
 // ---------------------------------------------------------------------------
 
-export function makeUpstreamPi(pi: ExtensionAPI): ExtensionAPI {
+export function makeUpstreamPi(
+	pi: ExtensionAPI,
+	{ owner = true }: { owner?: boolean } = {},
+): ExtensionAPI {
 	return new Proxy(pi, {
 		get(target, prop) {
 			if (prop === "registerTool") {
@@ -103,6 +125,39 @@ export function makeUpstreamPi(pi: ExtensionAPI): ExtensionAPI {
 				// both call sites are neutralized without this guard firing.
 				return (_names: string[]) => {
 					// Deliberately not forwarded.
+				};
+			}
+			if (prop === "on") {
+				return (event: string, handler: (...args: any[]) => any) => {
+					if (event === "session_shutdown") {
+						if (!owner) {
+							// Secondary in-process session (e.g. a pi-maestro SDK
+							// child): upstream's handler would tear down the owner's
+							// module-global runtime state on non-preserving reasons —
+							// nulling runtime.session (which permanently breaks
+							// `subagent` availability checks in this process),
+							// aborting the owner's running subagents, and releasing
+							// its held deliveries. pi invalidates this session's own
+							// listeners and API at session end, so dropping the
+							// registration leaks nothing the process does not
+							// reclaim with the child.
+							return;
+						}
+						// Owner: run upstream's teardown, then release the claim so
+						// the replacement session after reload/new/resume re-owns
+						// this process.
+						return target.on(
+							event as Parameters<ExtensionAPI["on"]>[0],
+							(async (e: any, ctx: any) => {
+								try {
+									return await handler(e, ctx);
+								} finally {
+									upstreamOwnerActive = false;
+								}
+							}) as any,
+						);
+					}
+					return target.on(event as any, handler as any);
 				};
 			}
 			const value = Reflect.get(target, prop, target);
@@ -394,8 +449,10 @@ function registerLeanTools(pi: ExtensionAPI): void {
 // ---------------------------------------------------------------------------
 
 export default function leanExtension(pi: ExtensionAPI): void {
+	const isOwner = !upstreamOwnerActive;
+	if (isOwner) upstreamOwnerActive = true;
 	realPi = pi;
-	const upstreamPi = makeUpstreamPi(pi);
+	const upstreamPi = makeUpstreamPi(pi, { owner: isOwner });
 
 	// Upstream registers its tools (captured), commands, renderers, and
 	// event handlers here.
@@ -416,6 +473,12 @@ export default function leanExtension(pi: ExtensionAPI): void {
 export function __resetLeanStateForTests(): void {
 	latest.clear();
 	realPi = null;
+	upstreamOwnerActive = false;
+}
+
+/** Test hook: whether a session currently owns upstream's process state. */
+export function __upstreamOwnerForTests(): boolean {
+	return upstreamOwnerActive;
 }
 
 /**

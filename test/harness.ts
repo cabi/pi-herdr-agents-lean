@@ -55,7 +55,7 @@ export class Harness {
   setActiveCalls = 0;
   commands: string[] = [];
   renderers: string[] = [];
-  events = { on: () => {} };
+  events = { on: () => () => {} };
   cwd: string;
   #handlers = new Map<string, Handler[]>();
 

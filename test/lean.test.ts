@@ -19,6 +19,7 @@ import { Harness, makeCtx } from "./harness.ts";
 import lean, {
 	__capturedToolsForTests,
 	__resetLeanStateForTests,
+	__upstreamOwnerForTests,
 	__stubCapturedDefForTests,
 	makeUpstreamPi,
 } from "../src/index.ts";
@@ -537,5 +538,68 @@ describe("child session scenario", () => {
 		await expect(
 			harness.callTool("subagent_ops", { op: "worktree_list" }),
 		).rejects.toThrow(/\[E_LEAN_OP\].*not available in this session/);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// In-process owner guard for upstream's session_shutdown teardown
+// ---------------------------------------------------------------------------
+
+describe("in-process owner guard", () => {
+	it("a non-owner proxy drops session_shutdown registrations", async () => {
+		__resetLeanStateForTests();
+		const harness = new Harness(join(root, "test"));
+		const proxy = makeUpstreamPi(harness as any, { owner: false });
+
+		let ran = 0;
+		proxy.on("session_shutdown", () => {
+			ran++;
+		});
+		await harness.emit("session_shutdown", { reason: "quit" });
+
+		expect(ran).toBe(0);
+		__resetLeanStateForTests();
+	});
+
+	it("an owner proxy wraps the handler and releases the claim on shutdown", async () => {
+		__resetLeanStateForTests();
+		const harness = new Harness(join(root, "test"));
+		const proxy = makeUpstreamPi(harness as any); // defaults to owner
+
+		let ran = 0;
+		proxy.on("session_shutdown", async () => {
+			ran++;
+		});
+		// A preserving reason keeps upstream teardown inert while still
+		// exercising the wrapper's claim release.
+		await harness.emit("session_shutdown", { reason: "reload" });
+
+		expect(ran).toBe(1);
+		__resetLeanStateForTests();
+	});
+
+	it("the first leanExtension load owns the process; a second in-process load never tears down", async () => {
+		__resetLeanStateForTests();
+		setEnv({ PI_SUBAGENT_ID: undefined, PI_DENY_TOOLS: undefined });
+		const ownerHarness = new Harness(join(root, "test"));
+		const childHarness = new Harness(join(root, "test"));
+
+		lean(ownerHarness as any);
+		expect(__upstreamOwnerForTests()).toBe(true);
+
+		lean(childHarness as any);
+		expect(__upstreamOwnerForTests()).toBe(true); // still the owner's claim
+
+		// Closing the in-process child must not release the owner's claim:
+		// upstream's shutdown registration was dropped for that load.
+		await childHarness.emit("session_shutdown", { reason: "quit" });
+		expect(__upstreamOwnerForTests()).toBe(true);
+
+		// The owner's own shutdown (preserving reason here to keep upstream's
+		// teardown inert) releases the claim for the replacement session.
+		await ownerHarness.emit("session_shutdown", { reason: "reload" });
+		expect(__upstreamOwnerForTests()).toBe(false);
+
+		__resetLeanStateForTests();
 	});
 });
