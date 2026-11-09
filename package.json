@@ -1,6 +1,6 @@
 {
   "name": "pi-herdr-agents-lean",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Token-lean wrapper around pi-herdr-agents: identical features, trimmed tool descriptions and schemas. Upstream is a pinned dependency, wrapped via Proxy.",
   "license": "MIT",
   "type": "module",
